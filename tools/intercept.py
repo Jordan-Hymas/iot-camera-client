@@ -49,6 +49,8 @@ from client.protocol import (
     CMD_DISCOVERY_ACK,
     CMD_PING,
     CMD_PING_ACK,
+    CMD_SESSION_CONF,
+    CMD_SESSION_READY,
     CMD_RELAY_REGISTER,
     CMD_PUNCH_SPEC,
     DISCOVERY_ACK_PAYLOAD,
@@ -238,22 +240,64 @@ def main():
             pong = Packet(CMD_PING_ACK, DEVICE_IDENTITY)
             send(pong, (src_ip, src_port), note="Camera emulator: ping ack")
 
+        elif cmd == CMD_SESSION_CONF:
+            # Phone sent 0x42 (session confirmation + identity) — this is the new step.
+            # Respond with 0x43 (session ready) and stay on the session to capture what comes next.
+            print(f"  <-- {label}:{src_port}  f1 42 SESSION_CONF  → responding with f1 43")
+            phone_sessions[src_port] = phone_sessions.get(src_port, {})
+            phone_sessions[src_port]["session_confirmed"] = True
+
+            # Try 0x43 empty first
+            ready = Packet(CMD_SESSION_READY, b"")
+            send(ready, (src_ip, src_port), note="Camera emulator: session ready (0x43 empty)")
+
+            # Also try 0x43 + identity in case empty doesn't unlock the next step
+            ready_id = Packet(CMD_SESSION_READY, DEVICE_IDENTITY)
+            send(ready_id, (src_ip, src_port), note="Camera emulator: session ready (0x43 + identity)")
+
         else:
-            # Anything that is NOT a discovery or ping from the phone is a new protocol message
-            # This is what we're hunting for — the AV session request
+            # Any other command from the phone — this is what we're hunting for
+            # Could be: AV channel open, stream request, auth challenge, etc.
+            cmd_hex = f"0x{cmd:02x}" if cmd is not None else "unknown"
             print()
-            print(f"  *** NEW PACKET from {label}:{src_port} ***")
-            print(f"      cmd     : 0x{cmd:02x}" if cmd else f"      raw     : {data.hex()}")
-            print(f"      payload : {pkt.payload.hex()}" if pkt else f"      raw     : {data.hex()}")
+            print(f"  *** NEW PACKET from {label}:{src_port}  cmd={cmd_hex} ***")
+            print(f"      raw     : {data.hex()}")
             print(f"      length  : {len(data)}")
-            print(f"      desc    : {describe(data)}")
+            if pkt:
+                print(f"      payload : {pkt.payload.hex()}")
+                # Try to decode payload as ASCII
+                try:
+                    ascii_repr = ''.join(
+                        chr(b) if 32 <= b < 127 else f'\\x{b:02x}'
+                        for b in pkt.payload
+                    )
+                    print(f"      ascii   : {ascii_repr}")
+                except Exception:
+                    pass
+                # Check for embedded IP addresses (4 bytes that look like 192.168.x.x)
+                p = pkt.payload
+                for i in range(len(p) - 3):
+                    if p[i] in (192, 10, 172):
+                        maybe_ip = f"{p[i+3]}.{p[i+2]}.{p[i+1]}.{p[i]}"  # LE
+                        print(f"      possible IP @ offset {i} (LE): {maybe_ip}")
             print()
+
+            # Respond with a few candidates to see which unlocks the next step
+            for resp_cmd, resp_payload, note in [
+                (0x43, b"",              "0x43 empty"),
+                (0x43, DEVICE_IDENTITY, "0x43 + identity"),
+                (0xd0, b"",              "0xd0 empty (AV open attempt)"),
+                (0x01, b"",              "0x01 empty (session ack attempt)"),
+            ]:
+                r = Packet(resp_cmd, resp_payload)
+                send(r, (src_ip, src_port), note=f"response attempt: {note}")
+
             av_candidates.append({
-                "src": f"{src_ip}:{src_port}",
-                "raw": data.hex(),
-                "cmd": f"0x{cmd:02x}" if cmd else None,
+                "src":     f"{src_ip}:{src_port}",
+                "cmd":     cmd_hex,
+                "raw":     data.hex(),
                 "payload": pkt.payload.hex() if pkt else None,
-                "note": "POTENTIAL AV SESSION REQUEST",
+                "note":    f"UNKNOWN PACKET — possible AV/session request",
             })
 
     # -----------------------------------------------------------------------

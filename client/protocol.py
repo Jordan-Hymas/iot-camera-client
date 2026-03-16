@@ -25,6 +25,8 @@ CMD_DISCOVERY      = 0x36  # phone → broadcast: "camera, are you on this LAN?"
 # Confirmed response codes (observed 2026-03-15 session probe)
 CMD_DISCOVERY_ACK  = 0x21  # camera → client: response to CMD_DISCOVERY (payload: fc000000)
 CMD_PING_ACK       = 0x41  # camera → client: response to CMD_PING (payload: device identity)
+CMD_SESSION_CONF   = 0x42  # phone → camera:  session confirmation + identity (after 0x41)
+CMD_SESSION_READY  = 0x43  # camera → phone:  probable ACK of 0x42 (speculative — trying next)
 
 # Speculative command codes — standard in PPPP/0xf1 protocol family
 # These have NOT been confirmed from capture. Marked with _SPEC suffix.
@@ -112,6 +114,8 @@ class Packet:
 _CMD_NAMES = {
     CMD_RELAY_REGISTER:  "RELAY_REGISTER(0x10)",
     CMD_DISCOVERY_ACK:   "DISCOVERY_ACK(0x21)",
+    CMD_SESSION_CONF:    "SESSION_CONF(0x42)",
+    CMD_SESSION_READY:   "SESSION_READY?(0x43)",
     CMD_PING:            "PING(0x30)",
     CMD_DISCOVERY:       "DISCOVERY(0x36)",
     CMD_PING_ACK:        "PING_ACK(0x41)",
