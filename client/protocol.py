@@ -22,13 +22,21 @@ CMD_RELAY_REGISTER = 0x10  # camera → relay: "I'm alive, here is my local IP:p
 CMD_PING           = 0x30  # phone → broadcast: keepalive heartbeat (no payload)
 CMD_DISCOVERY      = 0x36  # phone → broadcast: "camera, are you on this LAN?"
 
+# Confirmed response codes (observed 2026-03-15 session probe)
+CMD_DISCOVERY_ACK  = 0x21  # camera → client: response to CMD_DISCOVERY (payload: fc000000)
+CMD_PING_ACK       = 0x41  # camera → client: response to CMD_PING (payload: device identity)
+
 # Speculative command codes — standard in PPPP/0xf1 protocol family
 # These have NOT been confirmed from capture. Marked with _SPEC suffix.
 CMD_HELLO_SPEC       = 0x00  # probable: initial session hello
 CMD_HELLO_ACK_SPEC   = 0x08  # probable: hello acknowledgement
+CMD_P2P_RDY_SPEC     = 0x10  # speculative: P2P ready (same code as relay register)
 CMD_PUNCH_SPEC       = 0x20  # probable: NAT hole-punch packet
 CMD_PUNCH_ACK_SPEC   = 0x28  # probable: hole-punch acknowledgement
 CMD_CLOSE_SPEC       = 0xF0  # probable: close session
+
+# Known payload from camera's 0x21 discovery ack
+DISCOVERY_ACK_PAYLOAD = bytes.fromhex("fc000000")  # 0xFC = unknown — possibly state/capability
 
 # ---------------------------------------------------------------------------
 # Device identity — confirmed from capture 2026-03-15
@@ -103,10 +111,13 @@ class Packet:
 # Command name lookup for display
 _CMD_NAMES = {
     CMD_RELAY_REGISTER:  "RELAY_REGISTER(0x10)",
+    CMD_DISCOVERY_ACK:   "DISCOVERY_ACK(0x21)",
     CMD_PING:            "PING(0x30)",
     CMD_DISCOVERY:       "DISCOVERY(0x36)",
+    CMD_PING_ACK:        "PING_ACK(0x41)",
     CMD_HELLO_SPEC:      "HELLO?(0x00)",
     CMD_HELLO_ACK_SPEC:  "HELLO_ACK?(0x08)",
+    CMD_P2P_RDY_SPEC:    "P2P_RDY?(0x10)",
     CMD_PUNCH_SPEC:      "PUNCH?(0x20)",
     CMD_PUNCH_ACK_SPEC:  "PUNCH_ACK?(0x28)",
     CMD_CLOSE_SPEC:      "CLOSE?(0xf0)",
