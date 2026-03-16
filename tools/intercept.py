@@ -174,16 +174,17 @@ def main():
     # Phase 2: Respond to phone, capture everything
     # -----------------------------------------------------------------------
     deadline      = time.time() + args.duration
-    punch_interval = 5.0   # Re-send punch to camera every N seconds to keep relay alive
-    last_punch     = time.time()
+    punch_interval  = 5.0   # Re-send punch to camera every N seconds (only before session)
+    last_punch      = time.time()
     phone_sessions: dict = {}   # track unique phone source ports
     av_candidates:  list  = []  # packets that look like AV/session requests
+    session_active  = False     # True once phone has sent 0x42 — stop punching camera
 
     while time.time() < deadline:
         remaining = int(deadline - time.time())
 
-        # Re-send punch periodically to keep relay notified
-        if time.time() - last_punch >= punch_interval:
+        # Only punch the camera while no active session — punches disrupt relay registration
+        if not session_active and time.time() - last_punch >= punch_interval:
             send(punch_pkt,          (CAMERA_IP, CAMERA_PORT), note="Keepalive punch")
             send(make_ping_packet(), (CAMERA_IP, CAMERA_PORT), note="Keepalive ping to camera")
             last_punch = time.time()
@@ -246,6 +247,7 @@ def main():
             print(f"  <-- {label}:{src_port}  f1 42 SESSION_CONF  → responding with f1 43")
             phone_sessions[src_port] = phone_sessions.get(src_port, {})
             phone_sessions[src_port]["session_confirmed"] = True
+            session_active = True  # stop punching camera — don't disrupt relay
 
             # Try 0x43 empty first
             ready = Packet(CMD_SESSION_READY, b"")
